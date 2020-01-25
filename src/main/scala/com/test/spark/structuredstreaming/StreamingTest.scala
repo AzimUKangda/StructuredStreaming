@@ -1,11 +1,16 @@
 package com.test.spark.structuredstreaming
+
+import org.apache.spark.sql.functions._
 import context._
+import Utility._
 
 object StreamingTest {
 
   def main(args: Array[String]): Unit = {
 
     import spark.implicits._
+
+    spark.sparkContext.setLogLevel("INFO")
 
     val df = spark.readStream
       .format("kafka")
@@ -17,7 +22,13 @@ object StreamingTest {
       .selectExpr("CAST(key AS STRING)", "CAST(value AS STRING)")
       .as[(String, String)]
 
-    val query = df.writeStream
+    val jsonString = """{"identifier":"Source1","Data":{"empid": 20,"ename": "wNASyvg","sal": 10925,"gender": "Female","deptNo": 92}}"""
+
+    val schema = spark.read.json(Seq(jsonString).toDS).schema
+
+    val flattendDF = df.select(from_json($"value", schema) as "value").select("value.*").select(flattenSchema(schema): _*)
+
+    val query = flattendDF.writeStream
       .format("parquet")
       .option("checkpointLocation", "/user/rajeshkr/checkpoint")
       .option("path", "/user/rajeshkr/data")
